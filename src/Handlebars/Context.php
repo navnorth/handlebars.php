@@ -166,7 +166,7 @@ class Handlebars_Context
         } elseif (is_object($variable)) {
             if (isset($variable->$inside)) {
                 $value = $variable->$inside;
-            } elseif (is_callable(array($variable, $inside))) {
+            } elseif (method_exists($inside, $variable)) {
                 $value = call_user_func(array($variable, $inside));
             }                
         } elseif ($inside === '.') {
