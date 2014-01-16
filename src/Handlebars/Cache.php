@@ -8,12 +8,15 @@
  * @category  Xamin
  * @package   Handlebars
  * @author    fzerorubigd <fzerorubigd@gmail.com>
+ * @author    Behrooz Shabani <everplays@gmail.com>
  * @copyright 2012 (c) ParsPooyesh Co
+ * @copyright 2013 (c) Behrooz Shabani
  * @license   MIT <http://opensource.org/licenses/MIT>
  * @version   GIT: $Id$
  * @link      http://xamin.ir
  */
 
+namespace Handlebars;
 
 /**
  * Cache interface
@@ -29,14 +32,15 @@
  * @link      http://xamin.ir
  */
 
-interface Handlebars_Cache
+interface Cache
 {
+
     /**
      * Get cache for $name if exist.
      *
      * @param string $name Cache id
      *
-     * @return data on hit, boolean false on cache not found
+     * @return mixed data on hit, boolean false on cache not found
      */
     public function get($name);
 
@@ -58,4 +62,5 @@ interface Handlebars_Cache
      * @return void
      */
     public function remove($name);
+
 }

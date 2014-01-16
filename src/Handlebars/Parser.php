@@ -9,15 +9,21 @@
  * @category  Xamin
  * @package   Handlebars
  * @author    fzerorubigd <fzerorubigd@gmail.com>
+ * @author    Behrooz Shabani <everplays@gmail.com>
  * @copyright 2012 (c) ParsPooyesh Co
+ * @copyright 2013 (c) Behrooz Shabani
  * @license   MIT <http://opensource.org/licenses/MIT>
  * @version   GIT: $Id$
  * @link      http://xamin.ir
  */
 
+namespace Handlebars;
+
 /**
- * Handlebars parser (infact its a mustache parser)
- * This class is responsible for turning raw template source into a set of Mustache tokens.
+ * Handlebars parser (based on mustache)
+ *
+ * This class is responsible for turning raw template source into a set of
+ * Handlebars tokens.
  *
  * @category  Xamin
  * @package   Handlebars
@@ -28,7 +34,7 @@
  * @link      http://xamin.ir
  */
 
-class Handlebars_Parser
+class Parser
 {
     /**
      * Process array of tokens and convert them into parse tree
@@ -39,19 +45,20 @@ class Handlebars_Parser
      */
     public function parse(array $tokens = array())
     {
-        return $this->_buildTree(new ArrayIterator($tokens));
+        return $this->_buildTree(new \ArrayIterator($tokens));
     }
 
     /**
      * Helper method for recursively building a parse tree.
      *
-     * @param ArrayIterator $tokens Stream of  tokens
+     * @param \ArrayIterator $tokens Stream of tokens
      *
+     * @throws \LogicException when nesting errors or mismatched section tags
+     * are encountered.
      * @return array Token parse tree
      *
-     * @throws LogicException when nesting errors or mismatched section tags are encountered.
      */
-    private function _buildTree(ArrayIterator $tokens)
+    private function _buildTree(\ArrayIterator $tokens)
     {
         $stack = array();
 
@@ -59,27 +66,26 @@ class Handlebars_Parser
             $token = $tokens->current();
             $tokens->next();
 
-            if ($token === null) {
-                continue;
-            } else {
-                switch ($token[Handlebars_Tokenizer::TYPE]) {
-                case Handlebars_Tokenizer::T_END_SECTION:
-                    $newNodes = array ();
-                    $continue = true;
+            if ($token !== null) {
+                switch ($token[Tokenizer::TYPE]) {
+                case Tokenizer::T_END_SECTION:
+                    $newNodes = array();
                     do {
                         $result = array_pop($stack);
                         if ($result === null) {
-                            throw new LogicException('Unexpected closing tag: /'. $token[Handlebars_Tokenizer::NAME]);
+                            throw new \LogicException(
+                                'Unexpected closing tag: /' . $token[Tokenizer::NAME]
+                            );
                         }
 
-                        if (!array_key_exists(Handlebars_Tokenizer::NODES, $result)
-                            && isset($result[Handlebars_Tokenizer::NAME])
-                            && $result[Handlebars_Tokenizer::NAME] == $token[Handlebars_Tokenizer::NAME]
+                        if (!array_key_exists(Tokenizer::NODES, $result)
+                            && isset($result[Tokenizer::NAME])
+                            && $result[Tokenizer::NAME] == $token[Tokenizer::NAME]
                         ) {
-                            $result[Handlebars_Tokenizer::NODES] = $newNodes;
-                            $result[Handlebars_Tokenizer::END]   = $token[Handlebars_Tokenizer::INDEX];
+                            $result[Tokenizer::NODES] = $newNodes;
+                            $result[Tokenizer::END] = $token[Tokenizer::INDEX];
                             array_push($stack, $result);
-                            break 2;
+                            break;
                         } else {
                             array_unshift($newNodes, $result);
                         }
@@ -95,4 +101,5 @@ class Handlebars_Parser
         return $stack;
 
     }
+
 }

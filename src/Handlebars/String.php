@@ -7,12 +7,14 @@
  * @category  Xamin
  * @package   Handlebars
  * @author    fzerorubigd <fzerorubigd@gmail.com>
+ * @author    Behrooz Shabani <everplays@gmail.com>
  * @copyright 2013 Authors
  * @license   MIT <http://opensource.org/licenses/MIT>
  * @version   GIT: $Id$
  * @link      http://xamin.ir
  */
 
+namespace Handlebars;
 
 /**
  * Handlebars string
@@ -26,7 +28,7 @@
  * @link      http://xamin.ir
  */
 
-class Handlebars_String
+class String
 {
     private $_string;
 
@@ -71,4 +73,5 @@ class Handlebars_String
     {
         $this->_string = $string;
     }
+
 }

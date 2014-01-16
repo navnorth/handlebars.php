@@ -3,17 +3,29 @@
     "description": "Handlebars processor for php",
     "homepage": "https://github.com/XaminProject/handlebars.php",
     "type": "library",
-    "license": "GPLv3",    
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "license": "MIT",
     "authors": [
         {
             "name": "fzerorubigd",
             "email": "fzerorubigd@gmail.com"
+        },
+        {
+            "name": "Behrooz Shabani (everplays)",
+            "email": "everplays@gmail.com"
         }
     ],
     "require": {
 
     },
+    "require-dev": {
+        "phpunit/phpunit": "3.7.*",
+        "squizlabs/php_codesniffer": "1.*"
+    },
     "autoload": {
-        "psr-0": { "Handlebars": "src/" }
+        "psr-0": {
+            "Handlebars": "src/"
+        }
     }
 }

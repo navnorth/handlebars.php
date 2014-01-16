@@ -8,13 +8,17 @@
  * @category  Xamin
  * @package   Handlebars
  * @author    Joey Baker <joey@byjoeybaker.com>
+ * @author    Behrooz Shabani <everplays@gmail.com>
  * @copyright 2013 (c) Meraki, LLP
+ * @copyright 2013 (c) Behrooz Shabani
  * @license   MIT <http://opensource.org/licenses/MIT>
  * @version   GIT: $Id$
  * @link      http://xamin.ir
  */
- 
- 
+
+namespace Handlebars\Cache;
+use Handlebars\Cache;
+
 /**
  * A dummy array cache
  *
@@ -26,26 +30,25 @@
  * @version   Release: @package_version@
  * @link      http://xamin.ir
  */
- 
-class Handlebars_Cache_APC implements Handlebars_Cache
+
+class APC implements Cache
 {
-    private $_cache = array();
- 
+
     /**
      * Get cache for $name if exist.
      *
      * @param string $name Cache id
      *
-     * @return data on hit, boolean false on cache not found
+     * @return mixed data on hit, boolean false on cache not found
      */
     public function get($name)
     {
-      if (apc_exists($name)){
-        return apc_fetch($name);
-      }
-      return false;
+        if (apc_exists($name)) {
+            return apc_fetch($name);
+        }
+        return false;
     }
- 
+
     /**
      * Set a cache
      *
@@ -58,7 +61,7 @@ class Handlebars_Cache_APC implements Handlebars_Cache
     {
         apc_store($name, $value);
     }
- 
+
     /**
      * Remove cache
      *
@@ -70,4 +73,5 @@ class Handlebars_Cache_APC implements Handlebars_Cache
     {
         apc_delete($name);
     }
+
 }

@@ -8,11 +8,17 @@
  * @category  Xamin
  * @package   Handlebars
  * @author    fzerorubigd <fzerorubigd@gmail.com>
+ * @author    Behrooz Shabani <everplays@gmail.com>
  * @copyright 2012 (c) ParsPooyesh Co
+ * @copyright 2013 (c) Behrooz Shabani
  * @license   MIT <http://opensource.org/licenses/MIT>
  * @version   GIT: $Id$
  * @link      http://xamin.ir
  */
+
+namespace Handlebars\Loader;
+use Handlebars\Loader;
+use Handlebars\String;
 
 /**
  * Handlebars Template string Loader implementation.
@@ -24,9 +30,9 @@
  * @license   MIT <http://opensource.org/licenses/MIT>
  * @version   Release: @package_version@
  * @link      http://xamin.ir *
- * @implements Loader
  */
-class Handlebars_Loader_StringLoader implements Handlebars_Loader
+
+class StringLoader implements Loader
 {
 
     /**
@@ -34,10 +40,11 @@ class Handlebars_Loader_StringLoader implements Handlebars_Loader
      *
      * @param string $name Handlebars Template source
      *
-     * @return Handlebars_string Handlebars Template source
+     * @return String Handlebars Template source
      */
     public function load($name)
     {
-        return new Handlebars_String($name);
+        return new String($name);
     }
+
 }
