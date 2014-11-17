@@ -9,6 +9,12 @@
  * @package   Handlebars
  * @author    fzerorubigd <fzerorubigd@gmail.com>
  * @author    Behrooz Shabani <everplays@gmail.com>
+ * @author    Chris Gray <chris.w.gray@gmail.com>
+ * @author    Dmitriy Simushev <simushevds@gmail.com>
+ * @author    majortom731 <majortom731@googlemail.com>
+ * @author    Jeff Turcotte <jeff.turcotte@gmail.com>
+ * @author    John Slegers <slegersjohn@gmail.com>
+ * @copyright 2010-2012 (c) Justin Hileman
  * @copyright 2012 (c) ParsPooyesh Co
  * @copyright 2013 (c) Behrooz Shabani
  * @license   MIT <http://opensource.org/licenses/MIT>
@@ -25,6 +31,7 @@ namespace Handlebars;
  * @category  Xamin
  * @package   Handlebars
  * @author    fzerorubigd <fzerorubigd@gmail.com>
+ * @copyright 2010-2012 (c) Justin Hileman
  * @copyright 2012 (c) ParsPooyesh Co
  * @license   MIT <http://opensource.org/licenses/MIT>
  * @version   Release: @package_version@
@@ -122,6 +129,18 @@ class Template
     }
 
     /**
+     * Get the current token's tree
+     *
+     * @return array
+     */
+    public function getCurrentTokenTree()
+    {
+        $topStack = end($this->_stack);
+
+        return $topStack[1];
+    }
+
+    /**
      * Render top tree
      *
      * @param mixed $context current context
@@ -138,6 +157,7 @@ class Template
         list($index, $tree, $stop) = $topTree;
 
         $buffer = '';
+        $rTrim = false;
         while (array_key_exists($index, $tree)) {
             $current = $tree[$index];
             $index++;
@@ -148,44 +168,26 @@ class Template
             ) {
                 break;
             }
-            switch ($current[Tokenizer::TYPE]) {
-            case Tokenizer::T_SECTION :
-                $newStack = isset($current[Tokenizer::NODES])
-                    ? $current[Tokenizer::NODES] : array();
-                array_push($this->_stack, array(0, $newStack, false));
-                $buffer .= $this->_section($context, $current);
-                array_pop($this->_stack);
-                break;
-            case Tokenizer::T_INVERTED :
-                $newStack = isset($current[Tokenizer::NODES]) ?
-                    $current[Tokenizer::NODES] : array();
-                array_push($this->_stack, array(0, $newStack, false));
-                $buffer .= $this->_inverted($context, $current);
-                array_pop($this->_stack);
-                break;
-            case Tokenizer::T_COMMENT :
-                $buffer .= '';
-                break;
-            case Tokenizer::T_PARTIAL:
-            case Tokenizer::T_PARTIAL_2:
-                $buffer .= $this->_partial($context, $current);
-                break;
-            case Tokenizer::T_UNESCAPED:
-            case Tokenizer::T_UNESCAPED_2:
-                $buffer .= $this->_get($context, $current, false);
-                break;
-            case Tokenizer::T_ESCAPED:
-
-                $buffer .= $this->_get($context, $current, true);
-                break;
-            case Tokenizer::T_TEXT:
-                $buffer .= $current[Tokenizer::VALUE];
-                break;
-            default:
-                throw new \RuntimeException(
-                    'Invalid node type : ' . json_encode($current)
-                );
+            if (isset($current[Tokenizer::TRIM_LEFT]) && $current[Tokenizer::TRIM_LEFT]) {
+                $buffer = rtrim($buffer);
             }
+
+            $tmp = $this->_renderInternal($current, $context);
+
+            if (isset($current[Tokenizer::TRIM_LEFT]) && $current[Tokenizer::TRIM_LEFT]) {
+                $tmp = rtrim($tmp);
+            }
+
+            if ($rTrim  || (isset($current[Tokenizer::TRIM_RIGHT]) && $current[Tokenizer::TRIM_RIGHT])) {
+                $tmp = ltrim($tmp);
+            }
+
+            $buffer .= $tmp;
+            // Some time, there is more than one string token (first is empty),
+            //so we need to trim all of them in one shot
+
+            $rTrim = (empty($tmp) && $rTrim) ||
+                isset($current[Tokenizer::TRIM_RIGHT]) && $current[Tokenizer::TRIM_RIGHT];
         }
         if ($stop) {
             //Ok break here, the helper should be aware of this.
@@ -196,6 +198,63 @@ class Template
         }
 
         return $buffer;
+    }
+
+    /**
+     * Render tokens base on type of tokens
+     *
+     * @param array $current current token
+     * @param mixed $context current context
+     *
+     * @return string
+     */
+    private function _renderInternal($current, $context)
+    {
+        $result = '';
+        switch ($current[Tokenizer::TYPE]) {
+        case Tokenizer::T_END_SECTION:
+            break; // Its here just for handling whitespace trim.
+        case Tokenizer::T_SECTION :
+            $newStack = isset($current[Tokenizer::NODES])
+                ? $current[Tokenizer::NODES] : array();
+            array_push($this->_stack, array(0, $newStack, false));
+            $result = $this->_section($context, $current);
+            array_pop($this->_stack);
+            break;
+        case Tokenizer::T_INVERTED :
+            $newStack = isset($current[Tokenizer::NODES]) ?
+                $current[Tokenizer::NODES] : array();
+            array_push($this->_stack, array(0, $newStack, false));
+            $result = $this->_inverted($context, $current);
+            array_pop($this->_stack);
+            break;
+        case Tokenizer::T_COMMENT :
+            $result = '';
+            break;
+        case Tokenizer::T_PARTIAL:
+        case Tokenizer::T_PARTIAL_2:
+            $result = $this->_partial($context, $current);
+            break;
+        case Tokenizer::T_UNESCAPED:
+        case Tokenizer::T_UNESCAPED_2:
+            $result = $this->_get($context, $current, false);
+            break;
+        case Tokenizer::T_ESCAPED:
+            $result = $this->_get($context, $current, true);
+            break;
+        case Tokenizer::T_TEXT:
+            $result = $current[Tokenizer::VALUE];
+            break;
+            /* How we could have another type of token? this part of code
+            is not used at all.
+            default:
+                throw new \RuntimeException(
+                    'Invalid node type : ' . json_encode($current)
+                );
+            */
+        }
+
+        return $result;
     }
 
     /**
@@ -230,6 +289,156 @@ class Template
     }
 
     /**
+     * Rewind top tree index to the first element
+     *
+     * @return void
+     */
+    public function rewind()
+    {
+        $topStack = array_pop($this->_stack);
+        $topStack[0] = 0;
+        array_push($this->_stack, $topStack);
+    }
+
+    /**
+     * Process handlebars section style
+     *
+     * @param Context $context current context
+     * @param array   $current section node data
+     *
+     * @return mixed|string
+     */
+    private function _handlebarsStyleSection(Context $context, $current)
+    {
+        $helpers = $this->handlebars->getHelpers();
+        $sectionName = $current[Tokenizer::NAME];
+
+        if (isset($current[Tokenizer::END])) {
+            $source = substr(
+                $this->getSource(),
+                $current[Tokenizer::INDEX],
+                $current[Tokenizer::END] - $current[Tokenizer::INDEX]
+            );
+        } else {
+            $source = '';
+        }
+
+        // subexpression parsing loop
+        $subexprs = array(); // will contain all subexpressions inside outermost brackets
+        $insideOf = array( 'single' => false, 'double' => false );
+        $lvl = 0;
+        $cur_start = 0;
+        for ($i=0; $i < strlen($current[Tokenizer::ARGS]); $i++) {
+            $cur = substr($current[Tokenizer::ARGS], $i, 1);
+            if ($cur == "'" ) {
+                $insideOf['single'] = ! $insideOf['single'];
+            }
+            if ($cur == '"' ) {
+                $insideOf['double'] = ! $insideOf['double'];
+            }
+            if ($cur == '(' && ! $insideOf['single'] && ! $insideOf['double']) {
+                if ($lvl == 0) {
+                    $cur_start = $i+1;
+                }
+                $lvl++;
+                continue;
+            }
+            if ($cur == ')' && ! $insideOf['single'] && ! $insideOf['double']) {
+                $lvl--;
+                if ($lvl == 0) {
+                    $subexprs[] = substr($current[Tokenizer::ARGS], $cur_start, $i - $cur_start);
+                }
+
+            }
+        }
+
+        if (! empty($subexprs)) {
+            foreach ($subexprs as $expr) {
+                $cmd = explode(" ", $expr);
+                $name = trim($cmd[0]);
+                // construct artificial section node
+                $section_node = array(
+                    Tokenizer::TYPE => Tokenizer::T_ESCAPED,
+                    Tokenizer::NAME => $name,
+                    Tokenizer::OTAG => $current[Tokenizer::OTAG],
+                    Tokenizer::CTAG => $current[Tokenizer::CTAG],
+                    Tokenizer::INDEX => $current[Tokenizer::INDEX],
+                    Tokenizer::ARGS => implode(" ", array_slice($cmd, 1))
+                );
+                // resolve the node recursively
+                $resolved = addcslashes($this->_handlebarsStyleSection($context, $section_node), '"');
+                // replace original subexpression with result
+                $current[Tokenizer::ARGS] = str_replace('('.$expr.')', '"' . $resolved . '"', $current[Tokenizer::ARGS]);
+            }
+        }
+
+        $return = $helpers->call($sectionName, $this, $context, $current[Tokenizer::ARGS], $source);
+
+        if ($return instanceof String) {
+            return $this->handlebars->loadString($return)->render($context);
+        } else {
+            return $return;
+        }
+    }
+
+    /**
+     * Process Mustache section style
+     *
+     * @param Context $context current context
+     * @param array   $current section node data
+     *
+     * @throws \RuntimeException
+     * @return mixed|string
+     */
+    private function _mustacheStyleSection(Context $context, $current)
+    {
+        $sectionName = $current[Tokenizer::NAME];
+
+        // fallback to mustache style each/with/for just if there is
+        // no argument at all.
+        try {
+            $sectionVar = $context->get($sectionName, true);
+        } catch (\InvalidArgumentException $e) {
+            throw new \RuntimeException(
+                $sectionName . ' is not registered as a helper'
+            );
+        }
+        $buffer = '';
+        if (is_array($sectionVar) || $sectionVar instanceof \Traversable) {
+            $isList = is_array($sectionVar) &&
+                (array_keys($sectionVar) === range(0, count($sectionVar) - 1));
+            $index = 0;
+            $lastIndex = $isList ? (count($sectionVar) - 1) : false;
+
+            foreach ($sectionVar as $key => $d) {
+                $specialVariables = array(
+                    '@index' => $index,
+                    '@first' => ($index === 0),
+                    '@last' => ($index === $lastIndex),
+                );
+                if (!$isList) {
+                    $specialVariables['@key'] = $key;
+                }
+                $context->pushSpecialVariables($specialVariables);
+                $context->push($d);
+                $buffer .= $this->render($context);
+                $context->pop();
+                $context->popSpecialVariables();
+                $index++;
+            }
+        } elseif (is_object($sectionVar)) {
+            //Act like with
+            $context->push($sectionVar);
+            $buffer = $this->render($context);
+            $context->pop();
+        } elseif ($sectionVar) {
+            $buffer = $this->render($context);
+        }
+
+        return $buffer;
+    }
+
+    /**
      * Process section nodes
      *
      * @param Context $context current context
@@ -243,57 +452,9 @@ class Template
         $helpers = $this->handlebars->getHelpers();
         $sectionName = $current[Tokenizer::NAME];
         if ($helpers->has($sectionName)) {
-            if (isset($current[Tokenizer::END])) {
-                $source = substr(
-                    $this->getSource(),
-                    $current[Tokenizer::INDEX],
-                    $current[Tokenizer::END] - $current[Tokenizer::INDEX]
-                );
-            } else {
-                $source = '';
-            }
-            $params = array(
-                $this, //First argument is this template
-                $context, //Second is current context
-                $current[Tokenizer::ARGS], //Arguments
-                $source
-            );
-
-            $return = call_user_func_array($helpers->$sectionName, $params);
-            if ($return instanceof String) {
-                return $this->handlebars->loadString($return)->render($context);
-            } else {
-                return $return;
-            }
+            return $this->_handlebarsStyleSection($context, $current);
         } elseif (trim($current[Tokenizer::ARGS]) == '') {
-            // fallback to mustache style each/with/for just if there is
-            // no argument at all.
-            try {
-                $sectionVar = $context->get($sectionName, true);
-            } catch (\InvalidArgumentException $e) {
-                throw new \RuntimeException(
-                    $sectionName . ' is not registered as a helper'
-                );
-            }
-            $buffer = '';
-            if (is_array($sectionVar) || $sectionVar instanceof \Traversable) {
-                foreach ($sectionVar as $index => $d) {
-                    $context->pushIndex($index);
-                    $context->push($d);
-                    $buffer .= $this->render($context);
-                    $context->pop();
-                    $context->popIndex();
-                }
-            } elseif (is_object($sectionVar)) {
-                //Act like with
-                $context->push($sectionVar);
-                $buffer = $this->render($context);
-                $context->pop();
-            } elseif ($sectionVar) {
-                $buffer = $this->render($context);
-            }
-
-            return $buffer;
+            return $this->_mustacheStyleSection($context, $current);
         } else {
             throw new \RuntimeException(
                 $sectionName . ' is not registered as a helper'
@@ -353,6 +514,7 @@ class Template
         $helpers = $this->getEngine()->getHelpers();
         // Tokenizer doesn't process the args -if any- so be aware of that
         $name = explode(' ', $current[Tokenizer::NAME], 2);
+
         return $helpers->has(reset($name));
     }
 
@@ -392,7 +554,18 @@ class Template
         $name = array_shift($args);
         $current[Tokenizer::NAME] = $name;
         $current[Tokenizer::ARGS] = implode(' ', $args);
-        return $this->_section($context, $current);
+        $result = $this->_section($context, $current);
+
+        if ($escaped && !($result instanceof SafeString)) {
+            $escape_args = $this->handlebars->getEscapeArgs();
+            array_unshift($escape_args, $result);
+            $result = call_user_func_array(
+                $this->handlebars->getEscape(),
+                array_values($escape_args)
+            );
+        }
+
+        return $result;
     }
 
     /**
@@ -408,12 +581,6 @@ class Template
     {
         $name = $current[Tokenizer::NAME];
         $value = $context->get($name);
-        if ($name == '@index') {
-            return $context->lastIndex();
-        }
-        if ($name == '@key') {
-            return $context->lastKey();
-        }
         if ($escaped) {
             $args = $this->handlebars->getEscapeArgs();
             array_unshift($args, $value);
@@ -424,5 +591,44 @@ class Template
         }
 
         return $value;
+    }
+
+    /**
+     * Break an argument string into an array of named arguments
+     *
+     * @param string $string Argument String as passed to a helper
+     *
+     * @return array the argument list as an array
+     */
+    public function parseNamedArguments($string)
+    {
+        if ($string instanceof Arguments) {
+            // This code is needed only for backward compatibility
+            $args = $string;
+        } else {
+            $args = new Arguments($string);
+        }
+
+        return $args->getNamedArguments();
+    }
+
+    /**
+     * Break an argument string into an array of strings
+     *
+     * @param string $string Argument String as passed to a helper
+     *
+     * @throws \RuntimeException
+     * @return array the argument list as an array
+     */
+    public function parseArguments($string)
+    {
+        if ($string instanceof Arguments) {
+            // This code is needed only for backward compatibility
+            $args = $string;
+        } else {
+            $args = new Arguments($string);
+        }
+
+        return $args->getPositionalArguments();
     }
 }

@@ -9,6 +9,10 @@
  * @package   Handlebars
  * @author    fzerorubigd <fzerorubigd@gmail.com>
  * @author    Behrooz Shabani <everplays@gmail.com>
+ * @author    Chris Gray <chris.w.gray@gmail.com>
+ * @author    Ulrik Lystbaek <ulrik@bettertaste.dk>
+ * @author    Dmitriy Simushev <simushevds@gmail.com>
+ * @copyright 2010-2012 (c) Justin Hileman
  * @copyright 2012 (c) ParsPooyesh Co
  * @copyright 2013 (c) Behrooz Shabani
  * @copyright 2013 (c) f0ruD A
@@ -27,6 +31,7 @@ namespace Handlebars;
  * @package   Handlebars
  * @author    fzerorubigd <fzerorubigd@gmail.com>
  * @author    Behrooz Shabani <everplays@gmail.com>
+ * @copyright 2010-2012 (c) Justin Hileman
  * @copyright 2012 (c) ParsPooyesh Co
  * @license   MIT <http://opensource.org/licenses/MIT>
  * @version   Release: @package_version@
@@ -35,6 +40,17 @@ namespace Handlebars;
 
 class Context
 {
+
+    /**
+     * List of charcters that cannot be used in identifiers.
+     */
+    const NOT_VALID_NAME_CHARS = '!"#%&\'()*+,./;<=>@[\\]^`{|}~';
+
+    /**
+     * List of characters that cannot be used in identifiers in segment-literal
+     * notation.
+     */
+    const NOT_VALID_SEGMENT_NAME_CHARS = "]";
 
     /**
      * @var array stack for context only top stack is available
@@ -50,6 +66,12 @@ class Context
      * @var array key stack for objects
      */
     protected $key = array();
+
+    /**
+     * @var array Special variables stack for sections. Each stack element can
+     * contain elements with "@index", "@key", "@first" and "@last" keys.
+     */
+    protected $specialVariables = array();
 
     /**
      * Mustache rendering Context constructor.
@@ -76,27 +98,17 @@ class Context
     }
 
     /**
-     * Push an Index onto the index stack
+     * Push an array of special variables to stack.
      *
-     * @param integer $index Index of the current section item.
-     *
-     * @return void
-     */
-    public function pushIndex($index)
-    {
-        array_push($this->index, $index);
-    }
-
-    /**
-     * Push a Key onto the key stack
-     *
-     * @param string $key Key of the current object property.
+     * @param array $variables An associative array of special variables.
      *
      * @return void
+     *
+     * @see \Handlebars\Context::$specialVariables
      */
-    public function pushKey($key)
+    public function pushSpecialVariables($variables)
     {
-        array_push($this->key, $key);
+        array_push($this->specialVariables, $variables);
     }
 
     /**
@@ -110,23 +122,15 @@ class Context
     }
 
     /**
-     * Pop the last index from the stack.
+     * Pop the last special variables set from the stack.
      *
-     * @return int Last index
-     */
-    public function popIndex()
-    {
-        return array_pop($this->index);
-    }
-
-    /**
-     * Pop the last key from the stack.
+     * @return array Associative array of special variables.
      *
-     * @return string Last key
+     * @see \Handlebars\Context::$specialVariables
      */
-    public function popKey()
+    public function popSpecialVariables()
     {
-        return array_pop($this->key);
+        return array_pop($this->specialVariables);
     }
 
     /**
@@ -140,23 +144,15 @@ class Context
     }
 
     /**
-     * Get the index of current section item.
+     * Get the last special variables set from the stack.
      *
-     * @return mixed Last index
-     */
-    public function lastIndex()
-    {
-        return end($this->index);
-    }
-
-    /**
-     * Get the key of current object property.
+     * @return array Associative array of special variables.
      *
-     * @return mixed Last key
+     * @see \Handlebars\Context::$specialVariables
      */
-    public function lastKey()
+    public function lastSpecialVariables()
     {
-        return end($this->key);
+        return end($this->specialVariables);
     }
 
     /**
@@ -177,17 +173,21 @@ class Context
     /**
      * Get a available from current context
      * Supported types :
-     * variable , ../variable , variable.variable , .
+     * variable , ../variable , variable.variable , variable.[variable] , .
      *
      * @param string  $variableName variable name to get from current context
      * @param boolean $strict       strict search? if not found then throw exception
      *
      * @throws \InvalidArgumentException in strict mode and variable not found
+     * @throws \RuntimeException if supplied argument is a malformed quoted string 
+     * @throws \InvalidArgumentException if variable name is invalid
      * @return mixed
      */
     public function get($variableName, $strict = false)
     {
-        //Need to clean up
+        if ($variableName instanceof \Handlebars\String) {
+            return (string)$variableName;
+        }
         $variableName = trim($variableName);
         $level = 0;
         while (substr($variableName, 0, 3) == '../') {
@@ -215,12 +215,22 @@ class Context
                     'can not find variable in context'
                 );
             }
-
             return '';
         } elseif ($variableName == '.' || $variableName == 'this') {
             return $current;
+        } elseif ($variableName[0] == '@') {
+            $specialVariables = $this->lastSpecialVariables();
+            if (isset($specialVariables[$variableName])) {
+                return $specialVariables[$variableName];
+            } elseif ($strict) {
+                throw new \InvalidArgumentException(
+                    'can not find variable in context'
+                );
+            } else {
+                return '';
+            }
         } else {
-            $chunks = explode('.', $variableName);
+            $chunks = $this->_splitVariableName($variableName);
             foreach ($chunks as $chunk) {
                 if (is_string($current) and $current == '') {
                     return $current;
@@ -228,7 +238,6 @@ class Context
                 $current = $this->_findVariableInContext($current, $chunk, $strict);
             }
         }
-
         return $current;
     }
 
@@ -244,12 +253,14 @@ class Context
      */
     private function _findVariableInContext($variable, $inside, $strict = false)
     {
-        $value = '';
+        $value = null;
         if (($inside !== '0' && empty($inside)) || ($inside == 'this')) {
             return $variable;
         } elseif (is_array($variable)) {
-            if (isset($variable[$inside])) {
+            if (isset($variable[$inside]) || array_key_exists($inside, $variable)) {
                 return $variable[$inside];
+            } elseif ($inside == "length") {
+                return count($variable);
             }
         } elseif (is_object($variable)) {
             if (isset($variable->$inside)) {
@@ -264,6 +275,41 @@ class Context
         }
 
         return $value;
+    }
+
+    /**
+     * Splits variable name to chunks.
+     *
+     * @param string $variableName Fully qualified name of a variable.
+     *
+     * @throws \InvalidArgumentException if variable name is invalid.
+     * @return array
+     */
+    private function _splitVariableName($variableName)
+    {
+        $bad_chars = preg_quote(self::NOT_VALID_NAME_CHARS, '/');
+        $bad_seg_chars = preg_quote(self::NOT_VALID_SEGMENT_NAME_CHARS, '/');
+
+        $name_pattern = "(?:[^" . $bad_chars . "\s]+)|(?:\[[^" . $bad_seg_chars . "]+\])";
+        $check_pattern = "/^((" . $name_pattern . ")\.)*(" . $name_pattern  . ")\.?$/";
+        $get_pattern = "/(?:" . $name_pattern . ")/";
+
+        if (!preg_match($check_pattern, $variableName)) {
+            throw new \InvalidArgumentException('variable name is invalid');
+        }
+
+        preg_match_all($get_pattern, $variableName, $matches);
+
+        $chunks = array();
+        foreach ($matches[0] as $chunk) {
+            // Remove wrapper braces if needed
+            if ($chunk[0] == '[') {
+                $chunk = substr($chunk, 1, -1);
+            }
+            $chunks[] = $chunk;
+        }
+
+        return $chunks;
     }
 
 }

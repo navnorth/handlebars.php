@@ -10,6 +10,7 @@
  * @package   Handlebars
  * @author    fzerorubigd <fzerorubigd@gmail.com>
  * @author    Behrooz Shabani <everplays@gmail.com>
+ * @copyright 2010-2012 (c) Justin Hileman
  * @copyright 2012 (c) ParsPooyesh Co
  * @copyright 2013 (c) Behrooz Shabani
  * @license   MIT <http://opensource.org/licenses/MIT>
@@ -28,6 +29,7 @@ namespace Handlebars;
  * @category  Xamin
  * @package   Handlebars
  * @author    fzerorubigd <fzerorubigd@gmail.com>
+ * @copyright 2010-2012 (c) Justin Hileman
  * @copyright 2012 (c) ParsPooyesh Co
  * @license   MIT <http://opensource.org/licenses/MIT>
  * @version   Release: @package_version@
@@ -50,6 +52,9 @@ class Parser
 
     /**
      * Helper method for recursively building a parse tree.
+     * Trim right and trim left is a bit tricky here.
+     * {{#begin~}}{{TOKEN}}, TOKEN.. {{LAST}}{{~/begin}} is translated to:
+     * {{#begin}}{{~TOKEN}}, TOKEN.. {{LAST~}}{{/begin}}
      *
      * @param \ArrayIterator $tokens Stream of tokens
      *
@@ -69,7 +74,7 @@ class Parser
             if ($token !== null) {
                 switch ($token[Tokenizer::TYPE]) {
                 case Tokenizer::T_END_SECTION:
-                    $newNodes = array();
+                    $newNodes = array($token);
                     do {
                         $result = array_pop($stack);
                         if ($result === null) {
@@ -82,6 +87,17 @@ class Parser
                             && isset($result[Tokenizer::NAME])
                             && $result[Tokenizer::NAME] == $token[Tokenizer::NAME]
                         ) {
+                            if (isset($result[Tokenizer::TRIM_RIGHT]) && $result[Tokenizer::TRIM_RIGHT]) {
+                                // If the start node has trim right, then its equal with the first item in the loop with
+                                // Trim left
+                                $newNodes[0][Tokenizer::TRIM_LEFT] = true;
+                            }
+
+                            if (isset($token[Tokenizer::TRIM_RIGHT]) && $token[Tokenizer::TRIM_RIGHT]) {
+                                //OK, if we have trim right here, we should pass it to the upper level.
+                                $result[Tokenizer::TRIM_RIGHT] = true;
+                            }
+
                             $result[Tokenizer::NODES] = $newNodes;
                             $result[Tokenizer::END] = $token[Tokenizer::INDEX];
                             array_push($stack, $result);
@@ -99,7 +115,6 @@ class Parser
         } while ($tokens->valid());
 
         return $stack;
-
     }
 
 }

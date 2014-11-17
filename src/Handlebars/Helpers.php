@@ -9,6 +9,8 @@
  * @package   Handlebars
  * @author    fzerorubigd <fzerorubigd@gmail.com>
  * @author    Behrooz Shabani <everplays@gmail.com>
+ * @author    Dmitriy Simushev <simushevds@gmail.com>
+ * @author    Jeff Turcotte <jeff.turcotte@gmail.com>
  * @copyright 2012 (c) ParsPooyesh Co
  * @copyright 2013 (c) Behrooz Shabani
  * @license   MIT <http://opensource.org/licenses/MIT>
@@ -24,8 +26,6 @@ namespace Handlebars;
  * a collection of helper function. normally a function like
  * function ($sender, $name, $arguments) $arguments is unscaped arguments and
  * is a string, not array
- *
- * TODO: Add support for an interface with an execute method
  *
  * @category  Xamin
  * @package   Handlebars
@@ -78,134 +78,59 @@ class Helpers
      */
     protected function addDefaultHelpers()
     {
-        $this->add(
-            'if',
-            function ($template, $context, $args, $source) {
-                /**
-                 * @var $template \Handlebars\Template
-                 * @var $context \Handlebars\Context
-                 * @var $args array
-                 * @var $source string
-                 */
-                $tmp = $context->get($args);
-
-                if ($tmp) {
-                    $template->setStopToken('else');
-                    $buffer = $template->render($context);
-                    $template->setStopToken(false);
-                    $template->discard($context);
-                } else {
-                    $template->setStopToken('else');
-                    $template->discard($context);
-                    $template->setStopToken(false);
-                    $buffer = $template->render($context);
-                }
-
-                return $buffer;
-            }
-        );
-
-        $this->add(
-            'each',
-            function ($template, $context, $args, $source) {
-                /**
-                 * @var $template \Handlebars\Template
-                 * @var $context \Handlebars\Context
-                 * @var $args array
-                 * @var $source string
-                 */
-                $tmp = $context->get($args);
-                $buffer = '';
-                if (is_array($tmp) || $tmp instanceof \Traversable) {
-                    $islist = ($tmp instanceof \Generator) || (array_keys($tmp) == range(0, count($tmp) - 1));
-
-                    foreach ($tmp as $key => $var) {
-                        if ($islist) {
-                            $context->pushIndex($key);
-                        } else {
-                            $context->pushKey($key);
-                        }
-                        $context->push($var);
-                        $buffer .= $template->render($context);
-                        $context->pop();
-                        if ($islist) {
-                            $context->popIndex();
-                        } else {
-                            $context->popKey();
-                        }
-                    }
-                }
-
-                return $buffer;
-            }
-        );
-
-        $this->add(
-            'unless',
-            function ($template, $context, $args, $source) {
-                /**
-                 * @var $template \Handlebars\Template
-                 * @var $context \Handlebars\Context
-                 * @var $args array
-                 * @var $source string
-                 */
-                $tmp = $context->get($args);
-                $buffer = '';
-                if (!$tmp) {
-                    $buffer = $template->render($context);
-                }
-
-                return $buffer;
-            }
-        );
-
-        $this->add(
-            'with',
-            function ($template, $context, $args, $source) {
-                /**
-                 * @var $template \Handlebars\Template
-                 * @var $context \Handlebars\Context
-                 * @var $args array
-                 * @var $source string
-                 */
-                $context->with($args);
-                $buffer = $template->render($context);
-                $context->pop();
-
-                return $buffer;
-            }
-        );
+        $this->add('if', new Helper\IfHelper());
+        $this->add('each', new Helper\EachHelper());
+        $this->add('unless', new Helper\UnlessHelper());
+        $this->add('with', new Helper\WithHelper());
 
         //Just for compatibility with ember
-        $this->add(
-            'bindAttr',
-            function ($template, $context, $args, $source) {
-                /**
-                 * @var $template \Handlebars\Template
-                 * @var $context \Handlebars\Context
-                 * @var $args array
-                 * @var $source string
-                 */
-                return $args;
-            }
-        );
+        $this->add('bindAttr', new Helper\BindAttrHelper());
     }
 
     /**
      * Add a new helper to helpers
      *
-     * @param string   $name   helper name
-     * @param callable $helper a function as a helper
+     * @param string $name   helper name
+     * @param mixed  $helper a callable or Helper implementation as a helper
      *
      * @throws \InvalidArgumentException if $helper is not a callable
      * @return void
      */
     public function add($name, $helper)
     {
-        if (!is_callable($helper)) {
-            throw new \InvalidArgumentException("$name Helper is not a callable.");
+        if (!is_callable($helper) && ! $helper instanceof Helper) {
+            throw new \InvalidArgumentException(
+                "$name Helper is not a callable or doesn't implement the Helper interface."
+            );
         }
         $this->helpers[$name] = $helper;
+    }
+
+    /**
+     * Calls a helper, whether it be a Closure or Helper instance
+     *
+     * @param string               $name     The name of the helper
+     * @param \Handlebars\Template $template The template instance
+     * @param \Handlebars\Context  $context  The current context
+     * @param array                $args     The arguments passed the the helper
+     * @param string               $source   The source
+     *
+     * @throws \InvalidArgumentException
+     * @return mixed The helper return value
+     */
+    public function call($name, Template $template, Context $context, $args, $source)
+    {
+        if (!$this->has($name)) {
+            throw new \InvalidArgumentException('Unknown helper: ' . $name);
+        }
+
+        if ($this->helpers[$name] instanceof Helper) {
+            return $this->helpers[$name]->execute(
+                $template, $context, $args, $source
+            );
+        }
+
+        return call_user_func($this->helpers[$name], $template, $context, $args, $source);
     }
 
     /**
@@ -263,7 +188,6 @@ class Helpers
         $this->add($name, $helper);
     }
 
-
     /**
      * Unset a helper
      *
@@ -314,5 +238,4 @@ class Helpers
     {
         return empty($this->helpers);
     }
-
 }
